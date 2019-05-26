@@ -4,65 +4,47 @@ using UnityEngine;
 
 public class WorldBehaviour : MonoBehaviour
 {
-    // Width and height of the texture in pixels.
-    public int pixWidth;
-    public int pixHeight;
-
-    // The origin of the sampled area in the plane.
-    public float xOrg;
-    public float yOrg;
-
-    // The number of cycles of the basic noise pattern that are repeated
-    // over the width and height of the texture.
-    public float scale = 1.0F;
-    public float alphaClipping = 0.5F;
-
-    private Texture2D noiseTex;
-    private Color[] pix;
-    private Renderer rend;
+    [SerializeField] protected WorldData _data;
+    [SerializeField] protected GameObject _voxelPrefab;
+    [SerializeField] protected GameObject _sectPrefab;
 
     void Start()
     {
-        rend = GetComponent<Renderer>();
-
-        // Set up the texture and a Color array to hold pixels during processing.
-        noiseTex = new Texture2D(pixWidth, pixHeight);
-        pix = new Color[noiseTex.width * noiseTex.height];
-        rend.material.mainTexture = noiseTex;
-        CalcNoise();
+        GenerateWorld();
     }
 
-    void CalcNoise()
+    protected void GenerateWorld()
     {
-        // For each pixel in the texture...
-        float y = 0.0F;
-
-        while (y < noiseTex.height) {
-            float x = 0.0F;
-            while (x < noiseTex.width) {
-                float xCoord = xOrg + x / noiseTex.width * scale;
-                float yCoord = yOrg + y / noiseTex.height * scale;
-                float sample = Mathf.PerlinNoise(xCoord, yCoord);
-                if(sample < alphaClipping) {
-                    sample = 0;
-                } else {
-                    sample = 1;
-                }
-                pix[(int)y * noiseTex.width + (int)x] = new Color(sample, sample, sample);
-                x++;
-            }
-            y++;
+        if(_data == null || _data.worldTexture == null) {
+            Debug.Log("Data is null, can't generate world");
+            return;
         }
 
-        // Copy the pixel data to the texture and load it into the GPU.
-        noiseTex.SetPixels(pix);
-        noiseTex.Apply();
+        VoxelType[] voxels = _data.worldVoxels;
+        int width = _data.pixWidth;
+        int height = _data.pixHeight;
+        int halfWidth = width / 2;
+        int halfHeight = height / 2;
+
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                CreateVoxel(voxels[i * width + j], j - halfWidth, i - halfHeight);
+            }
+        }
     }
 
-    private void OnValidate()
+    protected void CreateVoxel(VoxelType type, int x, int y)
     {
-        if (noiseTex != null) {
-            CalcNoise();
+        if(type == VoxelType.Void) {
+            return;
+        }
+
+        GameObject voxel = Instantiate(_voxelPrefab, transform);
+        voxel.transform.localPosition = new Vector3(x, -0.5f, y);
+
+        if(type == VoxelType.Sect) {
+            GameObject sect = Instantiate(_sectPrefab, transform);
+            sect.transform.localPosition = new Vector3(x, 0, y);
         }
     }
 }
