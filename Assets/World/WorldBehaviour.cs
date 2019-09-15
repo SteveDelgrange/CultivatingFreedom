@@ -1,50 +1,82 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class WorldBehaviour : MonoBehaviour
 {
     [SerializeField] protected WorldData _data;
-    [SerializeField] protected GameObject _voxelPrefab;
-    [SerializeField] protected GameObject _sectPrefab;
+    [SerializeField] protected GameObject _chunkPrefab;
 
-    void Start()
+    protected Vector3 _halfChunkSize;
+
+    protected bool _initialized = false;
+
+    public void Initialize()
     {
+        if (_initialized) {
+            return;
+        }
         GenerateWorld();
     }
 
     protected void GenerateWorld()
     {
-        if(_data == null || _data.worldTexture == null) {
+        if(_data == null) {
             Debug.Log("Data is null, can't generate world");
             return;
         }
 
-        VoxelType[] voxels = _data.worldVoxels;
-        int width = _data.pixWidth;
-        int height = _data.pixHeight;
-        int halfWidth = width / 2;
-        int halfHeight = height / 2;
+        _halfChunkSize = new Vector3(ChunkData.size / 2, 0, ChunkData.size / 2);
 
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                CreateVoxel(voxels[i * width + j], j - halfWidth, i - halfHeight);
-            }
-        }
+        ChunkData chunk = _data.GenerateChunkData(Vector2Int.zero);
+        GenerateChunkDisplay(chunk, Vector3Int.zero);
     }
 
-    protected void CreateVoxel(VoxelType type, int x, int y)
+    protected MeshFilter GenerateChunkDisplay(ChunkData data, Vector3 position)
     {
-        if(type == VoxelType.Void) {
-            return;
+        MeshFilter meshFilter = Instantiate(_chunkPrefab, transform).GetComponent<MeshFilter>();
+        meshFilter.transform.position = position - _halfChunkSize;
+        meshFilter.mesh = GenerateChunkMesh(data);
+        return meshFilter;
+    }
+
+    protected Mesh GenerateChunkMesh(ChunkData data)
+    {
+        int verticesNumber = ChunkData.size * ChunkData.size * 4;
+        int trianglesNumber = ChunkData.size * ChunkData.size * 6;
+
+        Vector3[] vertices = new Vector3[verticesNumber];
+        int[] triangles = new int[trianglesNumber];
+        Vector3[] normals = Enumerable.Repeat(Vector3.up, verticesNumber).ToArray();
+        Mesh m = new Mesh();
+
+        int vi = 0;
+        int ti = 0;
+
+        for (int i = 0; i < ChunkData.size; i++) {
+            for (int j = 0; j < ChunkData.size; j++) {
+                vertices[vi] =      new Vector3Int(j, 0, i);
+                vertices[vi+1] =    new Vector3Int(j, 0, i+1);
+                vertices[vi+2] =    new Vector3Int(j+1, 0, i+1);
+                vertices[vi+3] =    new Vector3Int(j+1, 0, i);
+
+                triangles[ti] = vi;
+                triangles[ti+1] = vi+1;
+                triangles[ti+2] = vi+2;
+
+                triangles[ti+3] = vi;
+                triangles[ti+4] = vi+2;
+                triangles[ti+5] = vi+3;
+
+                vi += 4;
+                ti += 6;
+            }
         }
 
-        GameObject voxel = Instantiate(_voxelPrefab, transform);
-        voxel.transform.localPosition = new Vector3(x, -0.5f, y);
-
-        if(type == VoxelType.Sect) {
-            GameObject sect = Instantiate(_sectPrefab, transform);
-            sect.transform.localPosition = new Vector3(x, 0, y);
-        }
+        m.vertices = vertices;
+        m.triangles = triangles;
+        m.normals = normals;
+        return m;
     }
 }

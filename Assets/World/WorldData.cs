@@ -3,20 +3,20 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-public enum VoxelType
-{
-    Void,
-    Grass,
-    Sect
-}
-
 [CreateAssetMenu(fileName = "NewWorldData", menuName = "Data/World")]
 public class WorldData : ScriptableObject
 {
     [Header("Basic settings")]
-    public Texture2D worldTexture;
-    [HideInInspector] public VoxelType[] worldVoxels;
+    public int seed;
+
+    public bool isInfinite = false;
+    [Range(1,100)] public int radius = 3;
+
+    public Dictionary<Vector2Int, ChunkData> chunks;
     public bool updateOnChange = false;
+
+    public Texture2D worldTexture;
+    public Renderer rend;
 
     // Width and height of the texture in pixels.
     public int pixWidth;
@@ -30,21 +30,47 @@ public class WorldData : ScriptableObject
     // over the width and height of the texture.
     public float scale = 1.0F;
     public float alphaClipping = 0.5F;
+    
 
     [Header("Sect settings")]
     public int xSectPos;
     public int ySectPos;
-
+    
     private Color[] pix;
 
+    public void Initialize()
+    {
+        RandomizeMap();
+        chunks = new Dictionary<Vector2Int, ChunkData>();
+    }
+
+    public ChunkData GenerateChunkData(Vector2Int position)
+    {
+        if (chunks.ContainsKey(position)) {
+            return chunks[position];
+        }
+
+        ChunkData chunk = new ChunkData();
+        for(int i = 0; i < ChunkData.size; i++) {
+            for (int j = 0; j < ChunkData.size; j++) {
+                chunk.cells[i,j] = CellType.Rock;
+            }
+        }
+        chunks[position] = chunk;
+        return chunk;
+    }
+
     [ContextMenu("Compute data")]
-    void CalcNoise()
+    void RandomizeMap()
     {
 
 #if UNITY_EDITOR
+        System.Random random = new System.Random(seed);
+        xOrg = random.Next(-1000000, 1000000);
+        yOrg = random.Next(-1000000, 1000000);
+
         Texture2D tex = new Texture2D(pixWidth, pixHeight, TextureFormat.ARGB32, false);
         pix = new Color[tex.width * tex.height];
-        worldVoxels = new VoxelType[tex.width * tex.height];
 
         // For each pixel in the texture...
         float y = 0.0F;
@@ -61,10 +87,8 @@ public class WorldData : ScriptableObject
                 int index = (int)y * tex.width + (int)x;
                 if (sample < alphaClipping) {
                     pix[index] = voidColor;
-                    worldVoxels[index] = VoxelType.Void;
                 } else {
                     pix[index] = grassColor;
-                    worldVoxels[index] = VoxelType.Grass;
                 }
                 x++;
             }
@@ -73,7 +97,6 @@ public class WorldData : ScriptableObject
 
         if(ySectPos < tex.height && ySectPos >= 0 && xSectPos < tex.width && xSectPos >= 0) {
             pix[ySectPos * tex.width + xSectPos] = sectColor;
-            worldVoxels[ySectPos * tex.width + xSectPos] = VoxelType.Sect;
         }
 
         // Copy the pixel data to the texture and load it into the GPU.
@@ -93,18 +116,7 @@ public class WorldData : ScriptableObject
     private void OnValidate()
     {
         if (updateOnChange) {
-            CalcNoise();
-        }
-    }
-
-    public static VoxelType GetVoxelTypeFromColor(Color color)
-    {
-        if(color == Color.white) {
-            return VoxelType.Grass;
-        } else if(color == Color.red) {
-            return VoxelType.Sect;
-        } else {
-            return VoxelType.Void;
+            RandomizeMap();
         }
     }
 }
